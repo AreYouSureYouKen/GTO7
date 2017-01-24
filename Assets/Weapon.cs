@@ -12,8 +12,7 @@ public class Weapon : MonoBehaviour {
         Debug.Log("this weapon is " + _isAttacking);
         if (_isAttacking)
         {
-
-                //Instantiate(impactPrefab, contact.point, Quaternion.FromToRotation(Vector3.up, contact.normal));
+                Instantiate(impactPrefab, this.transform.position, Quaternion.FromToRotation(Vector3.up, Vector3.up));
             Debug.Log("sending damage to " + other.gameObject.name);
             other.gameObject.SendMessage("Damage", Damage, SendMessageOptions.DontRequireReceiver);
         }

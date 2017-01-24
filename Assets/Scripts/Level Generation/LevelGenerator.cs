@@ -42,6 +42,8 @@ public class LevelGenerator : MonoBehaviour
             i++;
         }
         _cameraControl.SetLastLevelPiece(_currentPos);
+        GameManager _gameManager = FindObjectOfType<GameManager>();
+        _gameManager.StartTimer();
     }
 
 }

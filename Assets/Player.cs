@@ -47,86 +47,91 @@ public class Player : MonoBehaviour
     private Vector3 moveDirection = Vector3.zero;
     private float _verticalSpeed = 0;
     private float _currentHealth;
+    private bool _isAlive;
+    private GameManager _gameManager;
 
     void Start()
     {
         _characterController = GetComponent<CharacterController>();
         _animator = GetComponent<Animator>();
         _weapon = GetComponentInChildren<Weapon>();
+        _isAlive = true;
         _currentHealth = StartingHealth;
+        if (!_gameManager) _gameManager = FindObjectOfType<GameManager>();
     }
 
     void Update()
     {
-
-
-        moveDirection = new Vector3(Input.GetAxis("Vertical") * -1, _verticalSpeed, Input.GetAxis("Horizontal"));
-        moveDirection = transform.TransformDirection(moveDirection);
-        if (_canRun && _characterController.isGrounded && Input.GetButton("Fire3"))
+        if (_isAlive)
         {
-            moveDirection *= runSpeed;
-        }
-        else
-        {
-            moveDirection *= walkSpeed;
-        }
-
-        if (_fightModus) 
-        {
-            bool attackstate = _animator.GetCurrentAnimatorStateInfo(0).IsName("attacks");
-            _weapon.SetAttacking(attackstate);
-            if (Input.GetKeyDown("z") && !attackstate)
+            moveDirection = new Vector3(Input.GetAxis("Vertical") * -1, _verticalSpeed, Input.GetAxis("Horizontal"));
+            moveDirection = transform.TransformDirection(moveDirection);
+            if (_canRun && _characterController.isGrounded && Input.GetButton("Fire3"))
             {
-                myAudioSource.clip = wooshSounds[Random.Range(0, wooshSounds.Length)];
-                myAudioSource.pitch = 0.98f + 0.1f * Random.value;
-                myAudioSource.Play();
-
-                _animator.SetBool("attack", true);
+                moveDirection *= runSpeed;
             }
             else
             {
-                _animator.SetBool("attack", false);
+                moveDirection *= walkSpeed;
             }
-        }
-        
 
-
-
-        Vector3 velocity = _characterController.velocity;
-        float z = velocity.z;
-        float x = velocity.x;
-        Vector3 horizontalVelocity = new Vector3(x, 0, z);
-        float horizontalSpeed = horizontalVelocity.magnitude;
-        Vector3 localMagnitude = transform.InverseTransformDirection(horizontalVelocity);
-
-        _animator.SetFloat("hor", (localMagnitude.x), dampTime, 0.8f);
-        _animator.SetFloat("ver", (localMagnitude.z), dampTime, 0.8f);
-        if (_characterController.isGrounded)
-        {
-            if (Input.GetButton("Fire1"))
+            if (_fightModus)
             {
-                StartCoroutine(weaponSelect());
+                bool attackstate = _animator.GetCurrentAnimatorStateInfo(0).IsName("attacks");
+                _weapon.SetAttacking(attackstate);
+                if (Input.GetKeyDown("z") && !attackstate)
+                {
+                    myAudioSource.clip = wooshSounds[Random.Range(0, wooshSounds.Length)];
+                    myAudioSource.pitch = 0.98f + 0.1f * Random.value;
+                    myAudioSource.Play();
+
+                    _animator.SetBool("attack", true);
+                }
+                else
+                {
+                    _animator.SetBool("attack", false);
+                }
             }
-            _animator.SetFloat("speed", horizontalSpeed, dampTime, 0.2f);
-            if (Input.GetButton("Jump"))
+
+
+
+
+            Vector3 velocity = _characterController.velocity;
+            float z = velocity.z;
+            float x = velocity.x;
+            Vector3 horizontalVelocity = new Vector3(x, 0, z);
+            float horizontalSpeed = horizontalVelocity.magnitude;
+            Vector3 localMagnitude = transform.InverseTransformDirection(horizontalVelocity);
+
+            _animator.SetFloat("hor", (localMagnitude.x), dampTime, 0.8f);
+            _animator.SetFloat("ver", (localMagnitude.z), dampTime, 0.8f);
+            if (_characterController.isGrounded)
             {
-                _animator.SetBool("Jump", true);
-                _verticalSpeed = jumpHeight;
+                if (Input.GetButton("Fire1"))
+                {
+                    StartCoroutine(weaponSelect());
+                }
+                _animator.SetFloat("speed", horizontalSpeed, dampTime, 0.2f);
+                if (Input.GetButton("Jump"))
+                {
+                    _animator.SetBool("Jump", true);
+                    _verticalSpeed = jumpHeight;
+                }
+                else
+                {
+                    _animator.SetBool("Jump", false);
+                }
             }
             else
             {
-                _animator.SetBool("Jump", false);
+                _verticalSpeed -= gravity * Time.deltaTime;
             }
+
+            if (horizontalVelocity.magnitude > 0.01)
+                player.rotation = Quaternion.Slerp(player.rotation, Quaternion.LookRotation(horizontalVelocity), Time.deltaTime * rotateSpeed);
+            _characterController.Move(moveDirection * Time.deltaTime);
+            _animator.SetBool("grounded", _characterController.isGrounded);
         }
-        else
-        {
-            _verticalSpeed -= gravity * Time.deltaTime;
-        }
-        
-        if (horizontalVelocity.magnitude > 0.01)
-            player.rotation = Quaternion.Slerp(player.rotation, Quaternion.LookRotation(horizontalVelocity), Time.deltaTime * rotateSpeed);
-        _characterController.Move(moveDirection * Time.deltaTime);
-        _animator.SetBool("grounded", _characterController.isGrounded);
     }
 
     public IEnumerator weaponSelect ()
@@ -191,13 +196,20 @@ public class Player : MonoBehaviour
 
     public void Damage(float dmg)
     {
-        _currentHealth -= dmg;
-        if (_currentHealth <= 0f)
+        if (_currentHealth > 0)
         {
-            _animator.Play("Dead");
-        }
+            Debug.Log("received " + dmg + " damage");
+            _currentHealth -= dmg;
+            _gameManager.AddHitTaken();
+            if (_currentHealth <= 0f)
+            {
+                _animator.Play("Dead");
+                _isAlive = false;
+                _gameManager.EndGame();
+            }
 
-        float percentageLeft = _currentHealth / StartingHealth;
-        CurrentHealth.fillAmount = percentageLeft;
+            float percentageLeft = _currentHealth / StartingHealth;
+            CurrentHealth.fillAmount = percentageLeft;
+        }
     }
 }

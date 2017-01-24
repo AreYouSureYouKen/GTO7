@@ -41,9 +41,13 @@ public class BasicEnemyFSM : AdvancedFSM {
     private float elapsedTime;
     private bool wantToAttack = false;
     private bool alive = true;
+    private float _verticalSpeed = 0;
+    [SerializeField]
+    private float _gravity = 10;
 
     private Transform _player;
     private Animator anim;
+    private GameManager _gameManager;
 
     [SerializeField]
     List<FSMStateTransition> StateTransitions;
@@ -51,6 +55,7 @@ public class BasicEnemyFSM : AdvancedFSM {
     protected override void Initialize()
     {
         _currentHealth = StartingHealth;
+        if (!_gameManager) _gameManager = FindObjectOfType<GameManager>();
         anim = GetComponent<Animator>();
         elapsedTime = 0.0f;
         _player = GameObject.FindGameObjectWithTag("Player").transform;
@@ -64,10 +69,10 @@ public class BasicEnemyFSM : AdvancedFSM {
             hb.transform.SetParent(CanvasRect);
             HealthBar = hb.GetComponent<Image>();
             // get the current healthbar image in the child object asshole code.
-            currentHealthBar = hb.gameObject.GetComponentInChildren<Image>();
+            currentHealthBar = hb.gameObject.transform.GetChild(0).GetComponent<Image>();
         }
 
-
+        this.transform.position = new Vector3(this.transform.position.x, 0, this.transform.position.z);
 
         if (!_player)
         {
@@ -78,14 +83,18 @@ public class BasicEnemyFSM : AdvancedFSM {
 
     protected override void FSMUpdate()
     {
+        //healthbar section
+        Vector2 ViewportPosition = Camera.main.WorldToViewportPoint(this.gameObject.transform.position + Vector3.up * 2f);
+        Vector2 WorldObject_ScreenPosition = new Vector2(
+            ((ViewportPosition.x * CanvasRect.sizeDelta.x) - (CanvasRect.sizeDelta.x * 0.5f)),
+            ((ViewportPosition.y * CanvasRect.sizeDelta.y) - (CanvasRect.sizeDelta.y * 0.5f)));
+
+        HealthBar.rectTransform.anchoredPosition = WorldObject_ScreenPosition;
         if (alive)
         {
-            Vector2 ViewportPosition = Camera.main.WorldToViewportPoint(this.gameObject.transform.position + Vector3.up * 2f);
-            Vector2 WorldObject_ScreenPosition = new Vector2(
-                ((ViewportPosition.x * CanvasRect.sizeDelta.x) - (CanvasRect.sizeDelta.x * 0.5f)),
-                ((ViewportPosition.y * CanvasRect.sizeDelta.y) - (CanvasRect.sizeDelta.y * 0.5f)));
 
-            HealthBar.rectTransform.anchoredPosition = WorldObject_ScreenPosition;
+
+            // Horizontal speed section
             Vector3 velocity = _charController.velocity;
             float z = velocity.z;
             float x = velocity.x;
@@ -93,7 +102,8 @@ public class BasicEnemyFSM : AdvancedFSM {
             float horizontalSpeed = horizontalVelocity.magnitude;
             transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(horizontalVelocity), Time.deltaTime * rotateSpeed);
             anim.SetFloat("speed", horizontalSpeed);
-            enemWeap.SetAttacking(anim.GetCurrentAnimatorStateInfo(0).IsName("Attacking"));
+            
+            //Attack section
             if (wantToAttack && attackSpeed <= elapsedTime)
             {
                 anim.SetBool("Attack", true);
@@ -105,8 +115,6 @@ public class BasicEnemyFSM : AdvancedFSM {
                 anim.SetBool("Attack", false);
             }
 
-
-
             elapsedTime += Time.deltaTime;
         }
     }
@@ -115,7 +123,6 @@ public class BasicEnemyFSM : AdvancedFSM {
     {
         if (alive)
         {
-            Debug.Log(CurrentState);
             CurrentState.Reason(_player, transform);
             CurrentState.Act(_player, transform);
         }
@@ -123,25 +130,32 @@ public class BasicEnemyFSM : AdvancedFSM {
 
     public void PubMoveFSM(Vector3 targetPos, float moveSpeed, float rotateSpeed)
     {
-        // adapted from http://answers.unity3d.com/questions/550472/move-character-controller-to-a-point.html
-        this.moveSpeed = moveSpeed;
-        this.rotateSpeed = rotateSpeed;
+        if (alive)
+        {
+            // adapted from http://answers.unity3d.com/questions/550472/move-character-controller-to-a-point.html
+            this.moveSpeed = moveSpeed;
+            this.rotateSpeed = rotateSpeed;
 
 
             Vector3 offset = targetPos - transform.position;
-        if (offset.magnitude > .1f)
-        {
-            offset = offset.normalized * moveSpeed;
- 
-            if (!_charController.isGrounded)
+            if (offset.magnitude > .1f)
             {
-                offset.y -= 5f * Time.deltaTime;
-            }
+                offset = offset.normalized * moveSpeed;
+                _charController.Move(offset * Time.deltaTime);
 
-            _charController.Move(offset * Time.deltaTime);
-            
+            }
         }
         
+    }
+
+    public void SetAttackTrue()
+    {
+        enemWeap.SetAttacking(true);
+    }
+
+    public void SetAttackFalse()
+    {
+        enemWeap.SetAttacking(false);
     }
 
     public void TryAttack()
@@ -174,11 +188,12 @@ public class BasicEnemyFSM : AdvancedFSM {
     public void Damage(float dmg)
     {
         _currentHealth -= dmg;
+        _gameManager.AddHitDone();
         if (_currentHealth <= 0f)
         {
             anim.Play("Dead");
-
-
+            alive = false;
+            _gameManager.AddEnemyDefeated();
             Destroy(this.gameObject,3f);
             Destroy(HealthBar.gameObject,3f);
         }
